@@ -66,7 +66,7 @@ g++ -o travel Main.cpp FileOperations.h Location.h Route.h GraphFunctions.h
    - Choose your preference (fastest/cheapest)
 
 3. The program will generate an HTML file containing:
-   - A visual map of your route using Google Maps
+   - A visual map of your route using Leaflet
    - Detailed information about each leg of the journey
    - Transportation mode, duration, and cost for each segment
 
@@ -127,5 +127,5 @@ This project demonstrates:
 - File I/O operations in C++
 - Command-line interface design
 - Path finding and optimization techniques
-- Integration with external APIs (Google Maps)
+- Integration with external APIs (Leaflet)
 

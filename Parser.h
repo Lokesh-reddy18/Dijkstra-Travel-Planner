@@ -86,7 +86,7 @@ vector<Route*> routeParser(string filename){
 		allRoutes.push_back(edge);
 	}
 
-	cout << "Routes Parsed from: " << filename << endl;
+	cout << "\nRoutes Parsed from: " << filename << endl;
 	return allRoutes;
 }
 
