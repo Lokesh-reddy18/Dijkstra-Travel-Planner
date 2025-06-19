@@ -4,6 +4,7 @@
 #include <iterator>
 #include <vector>
 #include <stack>
+#include <algorithm>
 
 #include "FileOperations.h"
 #include "Route.h"
@@ -99,6 +100,42 @@ int main(int argc, char* argv[]){
 
 	stack<Location*> cityStack = graph.cityStacker(destination);
 	stack<Route*> routeStack = graph.routeStacker(destination, biPreference);
+
+	vector<Location*> citiesOrdered;
+	vector<Route*> routesOrdered;
+	stack<Location*> tempCityStack = cityStack;
+	stack<Route*> tempRouteStack = routeStack;
+	while (!tempCityStack.empty()) {
+		citiesOrdered.push_back(tempCityStack.top());
+		tempCityStack.pop();
+	}
+	while (!tempRouteStack.empty()) {
+		routesOrdered.push_back(tempRouteStack.top());
+		tempRouteStack.pop();
+	}
+	// Reverse to get correct order (start to end)
+	(citiesOrdered.begin(), citiesOrdered.end());
+
+	// Print all stops
+	cout << "\nStops: ";
+	for (size_t i = 0; i < citiesOrdered.size(); ++i) {
+		cout << citiesOrdered[i]->capital;
+		if (i != citiesOrdered.size() - 1) cout << " -> ";
+	}
+	cout << endl;
+
+	// Print each leg
+	float totalTime = 0.0f;
+	float totalCost = 0.0f;
+	for (size_t i = 0; i < routesOrdered.size(); ++i) {
+		Route* r = routesOrdered[i];
+		float cost = r->cost;
+		if (r->transport == "plane") cost = cost / MULTI;
+		totalTime += r->time;
+		totalCost += cost;
+	}
+	cout << "\nTotal time: " << totalTime << " hours" << endl;
+	cout << "Total cost: $" << totalCost << endl;
 
 	outputGenerator(outputFilename.c_str(), cityStack, routeStack, biPreference);
 

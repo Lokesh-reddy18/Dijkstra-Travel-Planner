@@ -36,13 +36,13 @@ public:
 	Route* getRoute(Location* start, bool costOrTime, float totalDistance);
 
 	vector<Route*>* adjacentRoutes(Location* city);
-	
+
 	stack<Location*>cityStacker(string destinationS);
 	stack<Route*> routeStacker(string destinationS, bool costOrTime);
 
 //-----------------------------------------------------------------------
 /*	SCRAPPED METHODS
-	
+
 	Location* getSmallest();
 	void printShortestRoute(string destinationS);
 	void printOutRoutes();
@@ -55,7 +55,7 @@ Graph::Graph(string nodesFile, string edgesFile){
 	cities = locationParser(nodesFile, routes);
 
 	numExists = cities.size();
-	
+
 }
 
 int Graph::getCityIndex(string key){
@@ -116,11 +116,18 @@ float Graph::getWeight(Location* start, Location* end, bool costOrTime){
 
 
 void Graph::Dijkstras(string startS, bool costOrTime){
-	
-	Location* start = getCity(startS);
-	float totalDistance = 0;
 
+	Location* start = getCity(startS);
 	start -> lengthFromStart = 0;
+
+	// Reset all cities to unvisited state
+	for(int i = 0; i < cities.size(); i++){
+		cities[i] -> exists = true;
+		if(cities[i] != start) {
+			cities[i] -> lengthFromStart = 999999;
+			cities[i] -> previous = NULL;
+		}
+	}
 
 	priority_queue<Location*,vector<Location*>,compareLocation> minHeap;
 
@@ -129,22 +136,31 @@ void Graph::Dijkstras(string startS, bool costOrTime){
 	}
 
 	while(!minHeap.empty()){
-		
-		while(!minHeap.empty() && minHeap.top() -> exists == false){
+
+		// Find the unvisited node with minimum distance
+		Location* smallest = NULL;
+		priority_queue<Location*,vector<Location*>,compareLocation> tempHeap;
+
+		while(!minHeap.empty()){
+			Location* current = minHeap.top();
 			minHeap.pop();
+
+			if(current -> exists) {
+				smallest = current;
+				// Put remaining elements back
+				while(!minHeap.empty()) {
+					tempHeap.push(minHeap.top());
+					minHeap.pop();
+				}
+				minHeap = tempHeap;
+				break;
+			}
 		}
 
-		Location* smallest;
-
-		if(!minHeap.empty()){
-			smallest = minHeap.top();
-		}
-		else{
+		if(smallest == NULL) {
 			return;
 		}
-		
-		
-		//cout << "Smallest popped: " << smallest -> lengthFromStart << endl;	//debug
+
 		smallest -> exists = false;
 
 		vector<Location*>* adjacentCities = adjacentLocations(smallest);	
@@ -153,27 +169,19 @@ void Graph::Dijkstras(string startS, bool costOrTime){
 
 			Location* adjacent = adjacentCities -> at(i);
 
-			float distance = getWeight(smallest, adjacent, costOrTime) + smallest -> lengthFromStart;
+			if(adjacent -> exists == true){
 
-			//cout << distance << "	vs	" << adjacent -> lengthFromStart << endl;	//debug
+				float distance = getWeight(smallest, adjacent, costOrTime) + smallest -> lengthFromStart;
 
-
-			if(distance < adjacent -> lengthFromStart){
-
-				adjacent -> lengthFromStart = distance;
-				adjacent -> previous = smallest;
-
-				totalDistance = distance;
-
+				if(distance < adjacent -> lengthFromStart){
+					adjacent -> lengthFromStart = distance;
+					adjacent -> previous = smallest;
+					minHeap.push(adjacent);
+				}
 			}
-
-			make_heap(const_cast<Location**>(&minHeap.top()), const_cast<Location**>(&minHeap.top()) + minHeap.size(), compareLocation());
-
 		}
 
 		delete adjacentCities;
-		
-
 	}
 }
 
@@ -203,7 +211,7 @@ vector<Route*>* Graph::adjacentRoutes(Location* city){
 }
 
 Route* Graph::getRoute(Location* start, bool costOrTime, float totalDistance){
-	
+
 	vector<Route*>* routes = adjacentRoutes(start);
 
 	float epsilon = 1e-5;
@@ -211,23 +219,23 @@ Route* Graph::getRoute(Location* start, bool costOrTime, float totalDistance){
 	for(int i = 0; i < routes -> size(); i++){
 
 			if(costOrTime == true){
-				if(fabs((totalDistance - routes -> at(i) -> cost) - routes -> at(i) -> origin -> lengthFromStart) > epsilon){
+				if(fabs((totalDistance - routes -> at(i) -> cost) - routes -> at(i) -> origin -> lengthFromStart) < epsilon){
 					return routes -> at(i);
 				}
 			}
 
 			else if(costOrTime == false){
-				if(fabs((totalDistance - routes -> at(i) -> time) - routes -> at(i) -> origin -> lengthFromStart) > epsilon){
+				if(fabs((totalDistance - routes -> at(i) -> time) - routes -> at(i) -> origin -> lengthFromStart) < epsilon){
 					return routes -> at(i);
 				}
 			}
-		
+
 	}
 	return NULL;
 }
 
 stack<Location*> Graph::cityStacker(string destinationS){
-	
+
 	Location* destination = getCity(destinationS);
 	stack<Location*> output;
 

@@ -7,6 +7,7 @@
 #include <iostream>
 #include <vector>
 #include <stack>
+#include <algorithm>
 
 #include "Location.h"
 
@@ -102,51 +103,97 @@ vector<Route*> routeParser(string filename){
 Generates an appropriately formatted html file that displays the route information passed in by the stack fo cities and routes
 */
 void outputGenerator(string filename, stack<Location*> cities, stack<Route*> routes, bool costOrTime){
-	
-	ofstream output(filename.c_str());
-	output << "<HTML><HEAD><TITLE>Shortest path from Italy to Kazakhstan</TITLE></HEAD><script type='text/javascript' src='http://maps.google.com/maps/api/js?sensor=false'></script><script>function initialize() { var myOptions = { zoom: 3, center: new google.maps.LatLng(0, 0), mapTypeId: google.maps.MapTypeId.ROADMAP};var map=new google.maps.Map(document.getElementById('map'), myOptions);\n";
+	// Copy stacks to vectors for easier processing
+	vector<Location*> citiesOrdered;
+	vector<Route*> routesOrdered;
+	stack<Location*> tempCityStack = cities;
+	stack<Route*> tempRouteStack = routes;
+	while (!tempCityStack.empty()) {
+		citiesOrdered.push_back(tempCityStack.top());
+		tempCityStack.pop();
+	}
+	while (!tempRouteStack.empty()) {
+		routesOrdered.push_back(tempRouteStack.top());
+		tempRouteStack.pop();
+	}
+	// Defensive: routesOrdered.size() should be one less than citiesOrdered.size()
+	size_t numLegs = std::min(routesOrdered.size(), (citiesOrdered.size() > 1 ? citiesOrdered.size() - 1 : 0));
 
-	int markerCount = 0;
-	int contentStringCount = 0;
-	Location* origin;
-	Location* destination;
-	Route* route;
-
-	float cost;
-
-	
-
-	while(!cities.empty() && !routes.empty()){
-
-		//cout << routes.size() << endl << cities.size() << "--" << endl;		//debug
-
-		origin = cities.top();
-		cities.pop();
-		destination = cities.top();
-						
-		output << "var marker" << markerCount << " = new google.maps.Marker({ position: new google.maps.LatLng(" << origin -> lat << ", " << origin -> lon << "), map: map, title: \"" << origin -> capital << ", " << origin -> country << "\"});\n";
-		
-		markerCount++;
-			
-		output << "var marker" << markerCount << " = new google.maps.Marker({ position: new google.maps.LatLng(" << destination -> lat << ", " << destination -> lon << "), map: map, title: \"" << destination -> capital << ", " << destination -> country << "\"});\n";
-		
-		markerCount++;
-
-		route = routes.top();
-		routes.pop();
-
-		cost = route -> cost;
-		if(route -> transport.compare("plane") == 0){
-			cost =  cost / MULTI;
-		}
-
-		output << "var contentString" << contentStringCount << " = \"" << origin -> capital << ", " << origin -> country << " --> " << destination -> capital << ", " << destination -> country << "(" << route -> transport << " - " << route -> time << " hours - $" << cost << ")\"; var path" << contentStringCount << " = new google.maps.Polyline({ path: [new google.maps.LatLng(" << origin -> lat << ", " << origin -> lon << "), new google.maps.LatLng(" << destination -> lat << ", " << destination -> lon << ")], strokeColor: '#0000FF', strokeOpacity: 1.0, strokeWeight: 2}); path"<< contentStringCount <<".setMap(map); google.maps.event.addListener(path" << contentStringCount << ", 'click', function(event) { alert(contentString" << contentStringCount << ");});\n";
-
-		contentStringCount++;
-		
+	// Calculate totals
+	float totalTime = 0.0f;
+	float totalCost = 0.0f;
+	for (size_t i = 0; i < numLegs; ++i) {
+		Route* r = routesOrdered[i];
+		float cost = r->cost;
+		if (r->transport == "plane") cost = cost / MULTI;
+		totalTime += r->time;
+		totalCost += cost;
 	}
 
-	output << "} google.maps.event.addDomListener(window, 'load', initialize); </script></HEAD><BODY><div id='map' style='width:100%;height:100%;'></div></BODY></HTML>";
+	ofstream output(filename.c_str());
+	output << "<HTML><HEAD><TITLE>Travel Route Summary</TITLE>";
+	// Bootstrap and custom styles
+	output << "<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'>";
+	output << "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css' />";
+	output << "<style>body{background:#f8f9fa;}#summary,#details{background:#fff;border-radius:10px;box-shadow:0 2px 8px #0001;padding:20px;}#details{margin-top:20px;}#map{border-radius:10px;box-shadow:0 2px 8px #0001;}details summary{font-size:1.1em;}li{margin-bottom:4px;}.leg-icon{font-size:1.2em;margin-right:8px;}#summary{position:sticky;top:0;z-index:100;}table{margin-bottom:0;} .leaflet-container { height: 400px; width: 100%; margin-top: 20px; }</style>";
+	output << "</HEAD>";
+	output << "<body><div class='container my-4'>";
+	// --- Summary Table ---
+	output << "<div id='summary' class='mb-4'><h2 class='mb-3'>Route Summary</h2>";
+	output << "<table class='table table-bordered'><tr><th>Total Time</th><th>Total Cost</th><th>Stops</th></tr><tr>";
+	output << "<td>" << totalTime << " hours</td>";
+	output << "<td>$" << totalCost << "</td>";
+	output << "<td>";
+	for (size_t i = 0; i < citiesOrdered.size(); ++i) {
+		output << citiesOrdered[i]->capital;
+		if (i != citiesOrdered.size() - 1) output << " &rarr; ";
+	}
+	output << "</td></tr></table></div>";
+
+	// --- Map ---
+	output << "<div id='map'></div>";
+	output << "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>\n";
+	output << "<script>\n";
+	// Center map on first city or default
+	double centerLat = 0.0, centerLon = 0.0;
+	if (!citiesOrdered.empty()) {
+		centerLat = citiesOrdered[0]->lat;
+		centerLon = citiesOrdered[0]->lon;
+	}
+	// Only street layer
+	output << "var street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' });\n";
+	output << "var map = L.map('map', { center: [" << centerLat << ", " << centerLon << "], zoom: 4, layers: [street] });\n";
+	// Add markers with popups for leg details
+	for (size_t i = 0; i < citiesOrdered.size(); ++i) {
+		std::string popup;
+		if (i == 0) {
+			popup = "Start of route";
+		} else if (i == citiesOrdered.size() - 1) {
+			popup = "End of route";
+		} else {
+			Route* r = routesOrdered[i-1];
+			float cost = r->cost;
+			if (r->transport == "plane") cost = cost / MULTI;
+			popup = "Arrived from <b>" + citiesOrdered[i-1]->capital + "</b><br>";
+			popup += "<b>Mode:</b> " + r->transport + "<br>";
+			popup += "<b>Time:</b> " + std::to_string(r->time) + " hours<br>";
+			popup += "<b>Cost:</b> $" + std::to_string(cost) + "<br>";
+			if (!r->note.empty()) popup += "<b>Notes:</b> " + r->note + "<br>";
+		}
+		popup = citiesOrdered[i]->capital + ", " + citiesOrdered[i]->country + "<br>" + popup;
+		output << "L.marker([" << citiesOrdered[i]->lat << ", " << citiesOrdered[i]->lon << "]).addTo(map).bindPopup('" << popup << "');\n";
+	}
+	// Draw route polyline
+	output << "var routeLine = L.polyline([";
+	for (size_t i = 0; i < citiesOrdered.size(); ++i) {
+		output << "[" << citiesOrdered[i]->lat << ", " << citiesOrdered[i]->lon << "]";
+		if (i != citiesOrdered.size() - 1) output << ", ";
+	}
+	output << "], {color: 'blue', weight: 4, opacity: 0.8}).addTo(map);\n";
+	// Fit map to route
+	output << "map.fitBounds(routeLine.getBounds());\n";
+	output << "</script>";
+	output << "</div></body></HTML>";
 	output.close();
 
 	cout << "Output File Generated: " << filename << endl;
